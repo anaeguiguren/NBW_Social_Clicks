@@ -1,18 +1,22 @@
 ---
 title: "NBW social clicks screening protocol"
-output: html_notebook
-
+output:
+  html_document:
+    df_print: paged
 ---
+  
 
-```{r libraries }
+```{r libraries, message=FALSE, warning=FALSE, echo = F}
 library(tuneR)
+library(lubridate)
+library(readxl)
+library(tidyverse)
 ```
 
 
-1. I went through the field annotations in PamGuard and manually flagged those that indicated the presence of click patterns or raspberries.
-Raspberries were noted either when we heard them above the water, or also when they were listened through on the hydrophone. I used the comment time stamp to identify the appropriate wave file.  
+1. I went through the PamGuard field annotations iand manually flagged those that indicated the presence of click patterns or "raspberries". Raspberries were noted either when they were heard  above the water, or  when they were listened through on the hydrophone. I used the comment time stamp to identify the appropriate wave file.  
 
-```{r}
+```{r screening1, eval = FALSE}
 # 1. read in field comments table -----
 comm <- read.csv("/Users/anacristinaeguigurenburneo/Library/Mobile Documents/com~apple~CloudDocs/PhD/Bottlenose_Whales/NBW_Social_Clicks/raw_data/NBW_aug_2021_listening_forms.csv", header = T)
 
@@ -26,11 +30,13 @@ flagged_comm$UTC_posix <- as.POSIXct(flagged_comm$UTC,
 
 
 # 2. obtain recording file names----
-recs<-list.files(path = "/Volumes/NBW_audio/NBW_2021_08_audio_backup_b", recursive = T, full.names = T)
+recs<-list.files(path = "/Volumes/NBW_audio/NBW_2021_08_audio_backup_b",
+                 recursive = T, full.names = T, 
+                 pattern = ".wav")
 
 recs<- as.data.frame(recs)
 
-# 3. obtain recording file timestamps----
+# 3. obtain recording file time stamps----
 
 # extract only file names (excluding folder names)
 recs$wav_names <- sub(".*/", "", recs$recs)
@@ -70,7 +76,6 @@ recs$DateTime <- paste(recs$Date, recs$Time, sep = " ")
 recs$DateTime <- as.POSIXct(recs$DateTime, 
                                  format = "%Y-%m-%d %H:%M:%S", 
                                  tz = "UTC")
-
 # find file duration
 
 recs$duration_min <- NA
@@ -91,12 +96,8 @@ recs$DateTime_end<- recs$DateTime + recs$duration_min*60
 # get files within which comments fall
 
 # get interval information
-library(lubridate)
 rec_intervals        <- as.list(interval(recs$DateTime, recs$DateTime_end))
 
-
-head(recs$DateTime)
-i<-2
 
 flagged_comm$wav_file_name <- NA
 flagged_comm$wav_file_path <- NA
@@ -107,42 +108,125 @@ for(i in seq_along(flagged_comm$wav_file_name)){
   }
 
 
-
-
-# 4. copy flagged files to computer (temporarily) ------
-
-
-
-# 4. create a folder that contains only these wav files ------
-
-#  place new folder path and name here
-
-folder <- "/Users/anacristinaeguigurenburneo/Desktop/NBW_raspberry_files"
-
-
-
-dir.create(folder)#creates a folder where all files will be stored
-
-
-file.copy(flagged_comm$wav_file_path, folder)
-
-# manually transfer them to Hard Drive, since I don't have enough USB 
-# adapters
-
-
 # 5. save table with observations-----
 
-write.csv(flagged_comm, "Processed_Data/Raspberries_and_patterns_screening.csv")
+write.csv(flagged_comm, "/Users/anacristinaeguigurenburneo/Library/Mobile Documents/com~apple~CloudDocs/PhD/Bottlenose_Whales/NBW_Social_Clicks/Processed_Data/Raspberries_and_patterns_screening.csv")
 ```
 
 
-
 2. Next, I excluded the files that met the following criteria from analysis:
-    - Odontocetes where visually detected within 30 from each wave file (using Identify_clean_raspberries_patterns.R) 
+    - Odontocetes where visually detected within 30 from each wave file.
     - Visibility was less than 1 nm.  
-    
-    
-3. This resulted in 10 files for initial screening, which I then copied to the hard drive.   
+```{r screening2, eval = F}
+
+# 1. get data -----
+wavs<- read.csv("/Users/anacristinaeguigurenburneo/Library/Mobile Documents/com~apple~CloudDocs/PhD/Bottlenose_Whales/NBW_Social_Clicks/Processed_Data/Raspberries_and_patterns_screening.csv", header = T)
+
+cet <- read.csv("/Users/anacristinaeguigurenburneo/Library/Mobile Documents/com~apple~CloudDocs/PhD/Bottlenose_Whales/NBW_Social_Clicks/Processed_Data/2021_08_Compiled_Sightings.csv", header = T)
 
 
-4. Created a filtered version so I could explore on PamLab simultaneously on Matlab (Filter 1,000 - 90,0000 hz)  
+# 1. subset all small odontocetes ------
+# not sperm whales nor Hyperoodon!
+odontocetes  <- c("Del", "Glob", "Gram", "Lag", "Meso")
+
+cet$odontocete <- NA
+
+
+for(i in seq_along(cet$Genus)){
+  cet$odontocete[i] <- any(cet$Genus[i] == odontocetes)
+}
+
+# subset:
+odo <- cet[cet$odontocete==TRUE,]
+
+# 2. flag wavs in which odontocetes where seen up to 30 minutes before & after----
+
+wavs$odontocete_flag <- NA
+wavs$odontocete_sp <- NA
+
+
+
+for(i in seq_along(wavs$odontocete_flag)){
+
+  wavs$odontocete_flag[i]<- any(as.POSIXct(wavs$PCLocalTime[i], tz = "UTC") %within% (interval(start = as.POSIXct(odo$DateT, tz = "UTC")-(30*60),
+                                         end = as.POSIXct(odo$TimeEnd, tz = "UTC")+(30*60))))
+  
+  tryCatch({
+    wavs$odontocete_sp[i]  <- odo$lat_name[which(as.POSIXct(wavs$PCLocalTime[i], tz = "UTC") %within% 
+                                                (interval(start = as.POSIXct(odo$DateT, tz = "UTC")-(30*60),
+                                                 end = as.POSIXct(odo$TimeEnd, tz = "UTC")+(30*60))))][1]
+  }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+  
+}
+
+
+# II.  add environmental data frames ----
+in_folder <- "/Users/anacristinaeguigurenburneo/Library/Mobile Documents/com~apple~CloudDocs/NBW_Gully_2021/August_2021"
+
+
+#1. get list of all excel files files----
+
+all.files <-list.files(in_folder, full.names = T, recursive = T, pattern = "xlsx") #list of all databases
+
+#initialize environmental datasheet list:
+environment <- vector("list", length = length(all.files))
+
+# import all environmental data sheets:
+for (i in seq_along(all.files)) {
+  tryCatch({
+    environment[[i]] <- data.frame(read_excel(all.files[i], sheet = "Environment"))
+  }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+env<-bind_rows(environment)
+
+
+# remove duplicates -----
+env <- env[!duplicated(env$DateT),]
+
+# assign environmental data to recordings ----
+env <- env[-which(is.na(env$DateT)),]
+
+wavs$time_diff  <- NA#to check how for away it is 
+wavs$wind_speed <- NA
+wavs$visibility <- NA
+
+for(i in seq_along(wavs$wind_speed)){
+  wavs$time_diff[i]   <- min(abs(as.POSIXct(wavs$PCLocalTime[i], tz = "UTC")-as.POSIXct(env$DateT, tz = "UTC")))
+  wavs$wind_speed[i]  <- env$Windspeed_kt[which.min(abs(as.POSIXct(wavs$PCLocalTime[i], tz = "UTC")-as.POSIXct(env$DateT, tz = "UTC")))]
+  wavs$visibility[i]  <- env$Vis[which.min(abs(as.POSIXct(wavs$PCLocalTime[i], tz = "UTC")-as.POSIXct(env$DateT, tz = "UTC")))]
+  
+}
+
+
+
+# 3. Flag bad environmental conditions:-----
+wavs$high_wind <- ifelse(wavs$wind_speed>=17, TRUE, FALSE)# none of them!
+wavs$bad_vis <- ifelse(wavs$visibility<=1, TRUE, FALSE)# none of them!
+
+# 4. Save for analysis------
+write.csv(wavs, "/Users/anacristinaeguigurenburneo/Library/Mobile Documents/com~apple~CloudDocs/PhD/Bottlenose_Whales/NBW_Social_Clicks/Processed_Data/Raspberries_and_patterns_screening.csv")
+
+
+flagged_wavs <- wavs[which(wavs$bad_vis==FALSE & wavs$high_wind == FALSE & wavs$odontocete_flag == FALSE),]
+
+
+# replaces cumlaude with NBW audio:
+
+# 5. Copy files to my computer-----
+
+folder <- "/Volumes/NBW_audio/NBW_raspberry_files_clean"
+
+dir.create(folder)#creates a folder where all files will be stored
+
+file.copy(flagged_wavs$wav_file_path, folder)
+
+```
+    
+      
+3. This resulted in 10 files for initial screening, are copied in the **NBW_audio** hard drive in the *"NBW_raspberry_files_clean"* folder. 
+
+
+4. Next, I created a filtered version on **Matlab** so I could explore on PamLab simultaneously on Matlab (Filter 1,000 - 90,0000 hz). Filtered files are saved in **NBW_audio/NBW_raspberry_files_clean/** with the suffix *norm_filtered.*
+
+
