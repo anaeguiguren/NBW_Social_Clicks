@@ -1,7 +1,18 @@
 ---
 title: "NBW social clicks screening protocol"
 output: html_notebook
+
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
 ---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
