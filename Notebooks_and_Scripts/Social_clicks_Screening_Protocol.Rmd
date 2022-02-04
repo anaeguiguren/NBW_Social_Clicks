@@ -229,4 +229,13 @@ file.copy(flagged_wavs$wav_file_path, folder)
 
 4. Next, I created a filtered version on **Matlab** so I could explore on PamLab simultaneously on Matlab (Filter 1,000 - 90,0000 hz). Filtered files are saved in **NBW_audio/NBW_raspberry_files_clean/** with the suffix *norm_filtered.*
 
+**PamGuard Settings**
+-Updated threshold to 10 dB - it was too noisy at 5 dB.
+
+
+**Preliminary Analysis** 
+Start by marking long patterns, regular patterns, and patter patterns... take note of the context.
+
+
+
 
